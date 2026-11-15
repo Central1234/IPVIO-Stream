@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Tabs on the iPhone; on wide screens (iPhone Duo inner display, iPad) the tab bar can become a sidebar.
 @MainActor
 struct RootView: View {
     @EnvironmentObject var library: Library
@@ -10,17 +11,13 @@ struct RootView: View {
                 NavigationStack { AddSourceView(firstRun: true) }
             } else {
                 TabView {
-                    NavigationStack { LiveView() }
-                        .tabItem { Label("Live TV", systemImage: "tv") }
-                    NavigationStack { VODView(kind: .movie) }
-                        .tabItem { Label("Movies", systemImage: "film") }
-                    NavigationStack { VODView(kind: .series) }
-                        .tabItem { Label("Series", systemImage: "square.stack") }
-                    NavigationStack { SearchView() }
-                        .tabItem { Label("Search", systemImage: "magnifyingglass") }
-                    NavigationStack { SettingsView() }
-                        .tabItem { Label("Settings", systemImage: "gearshape") }
+                    Tab("Live TV", systemImage: "tv") { NavigationStack { LiveView() } }
+                    Tab("Movies", systemImage: "film") { NavigationStack { VODView(kind: .movie) } }
+                    Tab("Series", systemImage: "square.stack") { NavigationStack { VODView(kind: .series) } }
+                    Tab("Search", systemImage: "magnifyingglass", role: .search) { NavigationStack { SearchView() } }
+                    Tab("Settings", systemImage: "gearshape") { NavigationStack { SettingsView() } }
                 }
+                .tabViewStyle(.sidebarAdaptable)
                 .overlay { if library.loading && library.catalog.isEmpty { LoadingView() } }
             }
         }
@@ -29,7 +26,6 @@ struct RootView: View {
     }
 }
 
-@MainActor
 struct LoadingView: View {
     var body: some View {
         VStack(spacing: 14) {

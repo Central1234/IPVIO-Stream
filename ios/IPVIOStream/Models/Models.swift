@@ -94,3 +94,16 @@ enum SourceError: LocalizedError {
         }
     }
 }
+
+extension MediaItem {
+    func playItem() -> PlayItem {
+        PlayItem(id: id, title: title, subtitle: kind == .live ? group : year, url: url,
+                 resumeKey: kind == .live ? nil : id, artwork: logo, live: kind == .live)
+    }
+}
+
+extension Episode {
+    func playItem(series: MediaItem) -> PlayItem {
+        PlayItem(id: id, title: "\(label) · \(title)", subtitle: series.title, url: url, resumeKey: id, artwork: still ?? series.logo)
+    }
+}

@@ -29,6 +29,8 @@ struct PosterCard: View {
 struct ChannelRow: View {
     let item: MediaItem
     var favorite = false
+    /// Bigger logo and text on wide screens.
+    var large = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -37,10 +39,13 @@ struct ChannelRow: View {
             } placeholder: {
                 Image(systemName: "tv").foregroundStyle(Theme.muted)
             }
-            .frame(width: 56, height: 36)
+            .frame(width: large ? 80 : 56, height: large ? 50 : 36)
             .background(Theme.surface)
             .clipShape(RoundedRectangle(cornerRadius: 6))
-            Text(item.title).lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title).font(large ? .title3.weight(.medium) : .body).lineLimit(1)
+                if large { Text(item.group).font(.caption).foregroundStyle(Theme.muted).lineLimit(1) }
+            }
             Spacer()
             if favorite { Image(systemName: "star.fill").foregroundStyle(Theme.green) }
         }

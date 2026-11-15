@@ -4,7 +4,7 @@ name: IPVIOStream
 options:
   bundleIdPrefix: com.ipvio
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "18.0"
   createIntermediateGroups: true
 settings:
   base:

@@ -4,7 +4,7 @@ import SwiftUI
 struct SearchView: View {
     @EnvironmentObject var library: Library
     @State private var query = ""
-    @State private var playing: MediaItem?
+    @State private var playing: PlayerLaunch?
 
     private func matches(_ items: [MediaItem]) -> [MediaItem] {
         let q = query.trimmingCharacters(in: .whitespaces).folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
@@ -19,7 +19,7 @@ struct SearchView: View {
             let series = matches(library.catalog.series)
             if !live.isEmpty {
                 Section("Live TV") {
-                    ForEach(live) { ch in Button { playing = ch } label: { ChannelRow(item: ch) }.foregroundStyle(.white) }
+                    ForEach(live) { ch in Button { playing = PlayerLaunch(items: live.map { $0.playItem() }, index: live.firstIndex(of: ch) ?? 0) } label: { ChannelRow(item: ch) }.foregroundStyle(.white) }
                 }
             }
             if !movies.isEmpty {
@@ -39,8 +39,6 @@ struct SearchView: View {
         .navigationDestination(for: MediaItem.self) { m in
             if m.kind == .series { SeriesDetailView(series: m) } else { MovieDetailView(movie: m) }
         }
-        .fullScreenCover(item: $playing) { ch in
-            PlayerView(title: ch.title, url: ch.url, resumeKey: nil)
-        }
+        .fullScreenCover(item: $playing) { p in PlayerScreen(items: p.items, index: p.index) }
     }
 }

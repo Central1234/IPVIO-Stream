@@ -26,15 +26,21 @@ final class Library: ObservableObject {
 
     // MARK: Sources
 
+    /// Loads the new source first and keeps it only when it works, so the user can correct the details on the same screen.
     func add(_ s: Source, password: String) async {
         s.password = password
-        sources.append(s)
-        activeId = s.id
-        persist()
-        await reload()
-        // A source that does not load is not kept, so the user can correct the details
-        if catalog.isEmpty, error != nil {
-            remove(s)
+        loading = true
+        error = nil
+        defer { loading = false }
+        do {
+            let c = try await load(s)
+            sources.append(s)
+            activeId = s.id
+            catalog = c
+            persist()
+        } catch {
+            Keychain.delete(account: s.id.uuidString)
+            self.error = message(error)
         }
     }
 
@@ -57,26 +63,34 @@ final class Library: ObservableObject {
         error = nil
         defer { loading = false }
         do {
-            switch s.kind {
-            case .xtream:
-                catalog = try await loadXtream(s)
-            case .emby:
-                catalog = try await EmbyClient(server: s.server, user: s.user, pass: s.password).load()
-            case .m3u:
-                guard let url = URL(string: s.server.trimmingCharacters(in: .whitespacesAndNewlines)), url.scheme?.hasPrefix("http") == true else { throw SourceError.badAddress }
-                var req = URLRequest(url: url, timeoutInterval: 120)
-                req.setValue("VLC/3.0.21 LibVLC/3.0.21", forHTTPHeaderField: "User-Agent")
-                let (data, resp) = try await URLSession.shared.data(for: req)
-                let code = (resp as? HTTPURLResponse)?.statusCode ?? 200
-                if code == 401 || code == 403 { throw SourceError.accessDenied(code) }
-                guard (200..<300).contains(code) else { throw SourceError.http(code) }
-                let text = String(decoding: data, as: UTF8.self)
-                let parsed = await Task.detached(priority: .userInitiated) { M3UParser.parse(text) }.value
-                if parsed.isEmpty { throw SourceError.empty }
-                catalog = parsed
-            }
+            catalog = try await load(s)
         } catch {
-            self.error = (error as? LocalizedError)?.errorDescription ?? "Could not load the playlist. Check the connection and the details."
+            self.error = message(error)
+        }
+    }
+
+    private func message(_ error: Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? "Could not load the playlist. Check the connection and the details."
+    }
+
+    private func load(_ s: Source) async throws -> Catalog {
+        switch s.kind {
+        case .xtream:
+            return try await loadXtream(s)
+        case .emby:
+            return try await EmbyClient(server: s.server, user: s.user, pass: s.password).load()
+        case .m3u:
+            guard let url = URL(string: s.server.trimmingCharacters(in: .whitespacesAndNewlines)), url.scheme?.hasPrefix("http") == true else { throw SourceError.badAddress }
+            var req = URLRequest(url: url, timeoutInterval: 120)
+            req.setValue("VLC/3.0.21 LibVLC/3.0.21", forHTTPHeaderField: "User-Agent")
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 200
+            if code == 401 || code == 403 { throw SourceError.accessDenied(code) }
+            guard (200..<300).contains(code) else { throw SourceError.http(code) }
+            let text = String(decoding: data, as: UTF8.self)
+            let parsed = await Task.detached(priority: .userInitiated) { M3UParser.parse(text) }.value
+            if parsed.isEmpty { throw SourceError.empty }
+            return parsed
         }
     }
 

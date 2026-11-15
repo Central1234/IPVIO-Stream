@@ -1,6 +1,12 @@
 Last update: 2026-11-12 (release 1.4 prepared). Read `CLAUDE.md` first, then this file.
 
-## Current task
+## Current task (13 Nov 2026)
+
+T-026 (Live TV only some categories, cut-off playlist kept as cache): implemented on branch `fix/playlist-cache` from `62846c7` (1.4.1). Task file `docs/tasks/T-026-playlist-cache-incomplete.md`. Status: **done, open for device test** (PR #71, CI green; the maintainer could not test on 13 Nov 2026). JVM tests ran (see task file). Do not merge before the device test. Next: maintainer builds, tests with "Playlist komplett neu laden" (steps in the task file), sends `adb logcat -d -s IPVIO-PL` if categories are still missing; then merge #71 into `main` and create the 1.4.2 branch from `main`.
+
+Workflow agreed on 13 Nov 2026: one branch and PR per change; merge into `main` after CI is green and a short device test of that change; a full device test of `main` before every release.
+
+## Previous task
 
 **PR #40 (`integration/2026-11-11`, from the browanoncoder fork)**: brought up to date with `main` after release 1.4.1 (merge commit, no rebase). In the merge the content mode of closed PR #13 (`ContentMode`, cache version 6, `contentMode` in the playlist JSON) was dropped in favour of `PlaylistMode` on `main`; the time-budgeted, cancellable search from the PR #14 follow-up was kept on top of `main`'s memory-saving search index. Remaining content: Live TV focus fixes, categories view paging and focus, search scoped to Movies/Series and version labels, #22, #26, #25, #10, Stalker newest-first order, translations, delete confirmation for playlists. Unit tests: 370 of 372 pass (the two `PhoneImportTest`/`PhoneTransferTest` socket tests also fail on `main`). Device test on SHIELD and a mock end-to-end run on the Android TV emulator: see the PR description.
 

@@ -1133,6 +1133,15 @@ object PlaylistStore {
         }
     }
 
+    /** Lives as long as the app: a load started from a settings page keeps running when the user leaves the page. */
+    private val appScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** Load [url] as the active list in the background (switch, delete, reload) – not tied to the screen that started it. */
+    fun loadDetached(c: Context, url: String) {
+        val app = c.applicationContext
+        appScope.launch { load(app, url, false) }
+    }
+
     /**
      * Loads a playlist. [save] = newly added (only adopted into the list on success, but remembered beforehand),
      * [ask] = may ask for languages on very large lists (not in the background), [resumed] = continued automatically.

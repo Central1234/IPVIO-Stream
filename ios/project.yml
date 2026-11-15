@@ -16,6 +16,8 @@ targets:
   IPVIOStream:
     type: application
     platform: iOS
+    scheme:
+      testTargets: [IPVIOStreamTests]
     sources:
       - path: IPVIOStream
     settings:

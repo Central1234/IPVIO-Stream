@@ -455,8 +455,8 @@ private fun AppContent() {
                 onPick = { name, list, sort ->
                     // #27: the whole area as pool, so the Genre pill can switch to another genre instead of filtering inside this one
                     val prov: List<Item> = c.provider.values.flatten()
-                    val all: List<Item> = if (prov.isNotEmpty()) prov else c.ipvio.values.flatten().distinctBy { it.id }
-                    val pool: List<Item>? = if (isTopEntry(name) || all.isEmpty()) null else all
+                    val areaAll: List<Item> = if (prov.isNotEmpty()) prov else c.ipvio.values.flatten().distinctBy { it.id }
+                    val pool: List<Item>? = if (isTopEntry(name) || areaAll.isEmpty()) null else areaAll
                     browse = BrowseState(BrowseReq(name, list, sort, pool = pool, catName = name))
                 },
                 onOpen = open,

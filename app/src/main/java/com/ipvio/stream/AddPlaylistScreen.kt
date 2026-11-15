@@ -53,7 +53,13 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
     var sn by remember { mutableStateOf(pendS?.sn ?: "") }
     var devId by remember { mutableStateOf(pendS?.id1 ?: "") }
     var devId2 by remember { mutableStateOf(pendS?.id2 ?: "") }
-    var url by remember { mutableStateOf(if (pend != null && pendX == null && pendS == null) pend.url else "") }
+    // Emby server (address + user name + password)
+    val pendE = remember { pend?.url?.let { EmbyLogic.parse(it) } }
+    var emby by remember { mutableStateOf(pendE != null) }
+    var embyServer by remember { mutableStateOf(pendE?.server ?: "") }
+    var embyUser by remember { mutableStateOf(pendE?.user ?: "") }
+    var embyPass by remember { mutableStateOf(pendE?.pass ?: "") }
+    var url by remember { mutableStateOf(if (pend != null && pendX == null && pendS == null && pendE == null) pend.url else "") }
     var host by remember { mutableStateOf(pendX?.first ?: "") }
     var user by remember { mutableStateOf(pendX?.second ?: "") }
     var pass by remember { mutableStateOf(pendX?.third ?: "") }
@@ -66,7 +72,7 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
         PhoneImport { inp ->
             Handler(Looper.getMainLooper()).post {
                 val u = if (inp.isXtream) PlaylistStore.xtreamUrl(inp.host, inp.user, inp.pass) else inp.url
-                stalker = false
+                stalker = false; emby = false
                 if (inp.isXtream) { xtream = true; host = inp.host; user = inp.user; pass = inp.pass } else { xtream = false; url = inp.url }
                 if (u == null) PlaylistStore.error = "Angaben unvollständig: Server, Benutzername und Passwort nötig."
                 else scope.launch { if (PlaylistStore.load(ctx, u, true)) onDone() }
@@ -177,11 +183,22 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
             }
             // The padding sits inside the scrolling row: an enlarged (focused) button must not be cut off at its edge
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FocusButton("M3U-Link", Modifier.focusRequester(startFocus), primary = !xtream && !stalker, compact = true) { xtream = false; stalker = false }
-                FocusButton("Xtream-Login", primary = xtream && !stalker, compact = true) { xtream = true; stalker = false }
-                FocusButton("Stalker-Portal", primary = stalker, compact = true) { stalker = true; xtream = false }
+                FocusButton("M3U-Link", Modifier.focusRequester(startFocus), primary = !xtream && !stalker && !emby, compact = true) { xtream = false; stalker = false; emby = false }
+                FocusButton("Xtream-Login", primary = xtream && !stalker && !emby, compact = true) { xtream = true; stalker = false; emby = false }
+                FocusButton("Stalker-Portal", primary = stalker, compact = true) { stalker = true; xtream = false; emby = false }
+                FocusButton("Emby-Server", primary = emby, compact = true) { emby = true; stalker = false; xtream = false }
             }
-            if (stalker) {
+            if (emby) {
+                Field(embyServer, { embyServer = it }, "Server-Adresse (z. B. http://192.168.1.20:8096)")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Field(embyUser, { embyUser = it }, "Benutzername", Modifier.weight(1f))
+                    Field(embyPass, { embyPass = it }, "Passwort", Modifier.weight(1f), password = !showPass)
+                }
+                Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
+                    FocusButton(if (showPass) "Passwort verbergen" else "Passwort anzeigen", compact = true) { showPass = !showPass }
+                }
+                Text("Filme, Serien und Live TV deines Emby-Servers erscheinen wie bei einer Playlist. Funktioniert auch mit Jellyfin.", color = Muted, fontSize = 12.sp, lineHeight = 16.sp)
+            } else if (stalker) {
                 Field(portal, { portal = it }, "Portal-Adresse (z. B. http://portal.tld:8080/c/)")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Field(mac, { mac = it }, "MAC-Adresse", Modifier.weight(1f))
@@ -224,11 +241,12 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 FocusButton(if (PlaylistStore.loading) "Lade…" else "Hinzufügen", primary = true, compact = true) {
                     if (PlaylistStore.loading) return@FocusButton
-                    val finalUrl = if (stalker) StalkerLogic.source(portal, mac, sn, devId, devId2)?.encode() else if (xtream) PlaylistStore.xtreamUrl(host, user, pass) else url
-                    if (finalUrl == null) PlaylistStore.error = if (stalker) "Angaben unvollständig: Portal-Adresse und MAC-Adresse (z. B. 00:1A:79:12:34:56) nötig." else "Angaben unvollständig: Server, Benutzername und Passwort nötig."
-                    else if (xtream && !stalker && !backupsValid(backups)) PlaylistStore.error = BACKUP_INVALID
+                    val finalUrl = if (emby) EmbyLogic.source(embyServer, embyUser, embyPass)?.encode()
+                        else if (stalker) StalkerLogic.source(portal, mac, sn, devId, devId2)?.encode() else if (xtream) PlaylistStore.xtreamUrl(host, user, pass) else url
+                    if (finalUrl == null) PlaylistStore.error = if (emby) "Angaben unvollständig: Server-Adresse und Benutzername nötig." else if (stalker) "Angaben unvollständig: Portal-Adresse und MAC-Adresse (z. B. 00:1A:79:12:34:56) nötig." else "Angaben unvollständig: Server, Benutzername und Passwort nötig."
+                    else if (xtream && !stalker && !emby && !backupsValid(backups)) PlaylistStore.error = BACKUP_INVALID
                     else {
-                        if (xtream && !stalker) PlaylistStore.setBackups(ctx, finalUrl, backups.toList())
+                        if (xtream && !stalker && !emby) PlaylistStore.setBackups(ctx, finalUrl, backups.toList())
                         scope.launch { if (PlaylistStore.load(ctx, finalUrl, true)) onDone() }
                     }
                 }

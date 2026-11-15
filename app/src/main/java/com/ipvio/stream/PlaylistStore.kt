@@ -376,7 +376,7 @@ object PlaylistStore {
     fun hostOf(url: String): String {
         if (url.startsWith("file://")) return url.substringAfterLast('/').substringBeforeLast('.').ifBlank { "Playlist" }
         return try {
-            val u = StalkerLogic.parse(url)?.portal ?: url
+            val u = StalkerLogic.parse(url)?.portal ?: EmbyLogic.parse(url)?.server ?: url
             android.net.Uri.parse(u).host ?: "Playlist"
         } catch (e: Exception) { "Playlist" }
     }
@@ -621,14 +621,14 @@ object PlaylistStore {
     /** Hosts that accepted the app identifier after refusing VLC (#90); stored as a set, also used for series episodes. */
     private const val UA_HOSTS = "pl_ua_native_hosts"
     @Volatile private var nativeHosts: Set<String>? = null
-    private fun hostOf(u: String): String? = runCatching { java.net.URI(u).host?.lowercase() }.getOrNull()
+    private fun uaHost(u: String): String? = runCatching { java.net.URI(u).host?.lowercase() }.getOrNull()
     private fun nativeFor(c: Context?, u: String): Boolean {
-        val h = hostOf(u) ?: return false
+        val h = uaHost(u) ?: return false
         val set = nativeHosts ?: c?.let { prefs(it).getStringSet(UA_HOSTS, emptySet()).orEmpty().toSet().also { s -> nativeHosts = s } } ?: return false
         return h in set
     }
     private fun rememberNative(c: Context, u: String) {
-        val h = hostOf(u) ?: return
+        val h = uaHost(u) ?: return
         val set = (nativeHosts ?: prefs(c).getStringSet(UA_HOSTS, emptySet()).orEmpty()) + h
         nativeHosts = set
         prefs(c).edit().putStringSet(UA_HOSTS, set).apply()
@@ -645,7 +645,7 @@ object PlaylistStore {
             return downloadOnce(c, u)
         } catch (e: PlaylistError) {
             val denied = e.message?.startsWith("Zugang abgelehnt") == true
-            if (native || !denied || u.startsWith("file://") || StalkerLogic.parse(u) != null) throw e
+            if (native || !denied || u.startsWith("file://") || StalkerLogic.parse(u) != null || EmbyLogic.isSource(u)) throw e
             if (cancelled()) throw CancellationException("abgebrochen")
             PlaylistDiag.log("ua", "403 with the VLC identifier, one attempt with the app identifier")
             uaNow = UA_NATIVE
@@ -671,6 +671,7 @@ object PlaylistStore {
             return f to Charsets.UTF_8
         }
         StalkerLogic.parse(u)?.let { return downloadStalker(c, u, it) }
+        EmbyLogic.parse(u)?.let { return downloadEmby(c, u, it) }
         val acct = XtreamLogic.fromUrl(u) ?: return downloadList(c, u)
         // If get.php has already failed once for this login, use the API right away
         if (useApi(c, u)) return downloadApi(c, u, acct)
@@ -777,6 +778,41 @@ object PlaylistStore {
         // Only after a successful load: which categories are loaded further on opening
         runCatching { stalkerMoreFile(c, u).writeText(StalkerLogic.encodeCats(more)) }
         StalkerMore.reset()
+        return raw to Charsets.UTF_8
+    }
+
+    /** Stable random device ID for the Emby server's device list (stored once, new key). */
+    private fun embyDeviceId(c: Context): String {
+        val p = prefs(c)
+        p.getString("emby_device_id", null)?.let { return it }
+        val id = "ipvio-" + java.util.UUID.randomUUID().toString()
+        p.edit().putString("emby_device_id", id).apply()
+        return id
+    }
+
+    /** Emby server: sign in and write movies, series and Live TV as a list (see [EmbyApi]). */
+    private fun downloadEmby(c: Context, u: String, src: EmbyLogic.Source): Pair<File, Charset> {
+        val raw = rawFile(c, u)
+        val info = infoFile(c, u)
+        val part = partFile(c, u)
+        val pi = LoadLogic.PartInfo.decode(runCatching { info.readText() }.getOrNull())?.takeIf { it.urlHash == key(u) }
+        if (pi != null && raw.exists() && raw.length() > 0 && System.currentTimeMillis() - raw.lastModified() < RAW_MAX_AGE) return raw to Charsets.UTF_8
+        raw.delete(); part.delete()
+        bytesRead = 0L; totalBytes = -1L; downloadDone = false
+        val api = EmbyApi(client, embyDeviceId(c), BuildConfig.VERSION_NAME)
+        api.onPhase = { phase = it }
+        api.check = { if (cancelled()) throw CancellationException("abgebrochen") }
+        val counter = CountingOut(FileOutputStream(part)) { bytesRead = it }
+        try {
+            val n = OutputStreamWriter(BufferedOutputStream(counter, 1 shl 16), Charsets.UTF_8).use { w -> api.write(src, w) }
+            PlaylistDiag.log("download(emby)", "entries=$n bytes=${part.length()}")
+            if (n == 0) throw PlaylistError("Auf dem Emby-Server wurden keine Filme, Serien oder Sender gefunden.")
+        } catch (e: Throwable) {
+            part.delete()
+            throw e
+        }
+        info.writeText(LoadLogic.PartInfo(key(u), null, null, "UTF-8").encode())
+        if (!part.renameTo(raw)) throw IOException("Datei konnte nicht umbenannt werden")
         return raw to Charsets.UTF_8
     }
 

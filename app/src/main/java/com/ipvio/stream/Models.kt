@@ -342,8 +342,9 @@ object M3uParser {
     /**
      * Address of a live channel: contains "/live/" (Xtream "…/live/user/pass/123.ts", Stalker "stalker://…/live/…")
      * and is not a video file (a plain web server folder named "live" with .mp4 files stays a movie).
+     * Emby live channels carry the marker [EmbyLogic.LIVE_MARK] instead.
      */
-    internal fun isLiveUrl(url: String): Boolean = url.contains("/live/") && !isVideoFile(url)
+    internal fun isLiveUrl(url: String): Boolean = (url.contains("/live/") || url.contains(EmbyLogic.LIVE_MARK)) && !isVideoFile(url)
 
     /** The episode pattern needs an "S" directly followed by a digit; names without it skip the regular expression. */
     internal fun mayBeEpisode(name: String): Boolean {

@@ -210,7 +210,12 @@ object PlaylistStore {
 
     private val XTREAM = Regex("""^(https?://[^/]+)/get\.php\?.*?username=([^&]+).*?password=([^&]+)""")
     // Common player identifier: some providers throttle unknown identifiers heavily (browser/VLC then load much faster)
-    private const val UA = "VLC/3.0.21 LibVLC/3.0.21"
+    private const val UA_VLC = "VLC/3.0.21 LibVLC/3.0.21"
+    /** The app's own identifier. Some providers answer the VLC identifier with 403 but accept this one (#90). */
+    private val UA_NATIVE = "IPVIOStream/" + BuildConfig.VERSION_NAME
+    /** Identifier for the playlist that is loading now: VLC by default, the app's own after a 403 was fixed by it (#90). */
+    @Volatile private var uaNow = UA_VLC
+    private val UA: String get() = uaNow
     /** A fully downloaded but not yet parsed list is reused for this long. */
     private const val RAW_MAX_AGE = 12 * 3_600_000L
     /** Free space that should remain at least after the download. */
@@ -564,12 +569,18 @@ object PlaylistStore {
      * Guard for long reads (every 2,000 entries): abort by the user, and stop before memory runs out.
      * A controlled abort with a notice is better than a crash in the middle of parsing.
      */
+    /** Application context for [guard] to empty caches before a parse is stopped for memory (#73). */
+    @Volatile private var trimCtx: Context? = null
+
     private fun guard(askable: Boolean = true): () -> Unit {
         val j = job
         return {
             if (j != null && !j.isActive) throw CancellationException("abgebrochen")
             if (askable && askRequested) throw AskAgain()
             if (Mem.heapTight(0.85)) {
+                // #73: image, EPG and metadata caches can fill most of the heap during the first setup; they are
+                // reloaded on demand, so empty them before giving up with "too big"
+                trimCtx?.let { runCatching { Mem.trim(it) } }
                 System.gc()
                 if (Mem.heapTight(0.85)) throw ParseStop("Speicher")
             }
@@ -607,7 +618,51 @@ object PlaylistStore {
      * Downloads the list into a file – not into working memory. Returns the finished file and its charset.
      * If a fully downloaded but unparsed file exists (crash/power loss while parsing), it is used.
      */
+    /** Hosts that accepted the app identifier after refusing VLC (#90); stored as a set, also used for series episodes. */
+    private const val UA_HOSTS = "pl_ua_native_hosts"
+    @Volatile private var nativeHosts: Set<String>? = null
+    private fun hostOf(u: String): String? = runCatching { java.net.URI(u).host?.lowercase() }.getOrNull()
+    private fun nativeFor(c: Context?, u: String): Boolean {
+        val h = hostOf(u) ?: return false
+        val set = nativeHosts ?: c?.let { prefs(it).getStringSet(UA_HOSTS, emptySet()).orEmpty().toSet().also { s -> nativeHosts = s } } ?: return false
+        return h in set
+    }
+    private fun rememberNative(c: Context, u: String) {
+        val h = hostOf(u) ?: return
+        val set = (nativeHosts ?: prefs(c).getStringSet(UA_HOSTS, emptySet()).orEmpty()) + h
+        nativeHosts = set
+        prefs(c).edit().putStringSet(UA_HOSTS, set).apply()
+    }
+
+    /**
+     * Download with the VLC identifier; if the provider answers 403 (access denied), try once with the app's own
+     * identifier and remember that for this playlist when it works (#90). Credentials, addresses and TLS stay unchanged.
+     */
     private fun download(c: Context, u: String): Pair<File, Charset> {
+        val native = nativeFor(c, u)
+        uaNow = if (native) UA_NATIVE else UA_VLC
+        try {
+            return downloadOnce(c, u)
+        } catch (e: PlaylistError) {
+            val denied = e.message?.startsWith("Zugang abgelehnt") == true
+            if (native || !denied || u.startsWith("file://") || StalkerLogic.parse(u) != null) throw e
+            if (cancelled()) throw CancellationException("abgebrochen")
+            PlaylistDiag.log("ua", "403 with the VLC identifier, one attempt with the app identifier")
+            uaNow = UA_NATIVE
+            val r = try {
+                downloadOnce(c, u)
+            } catch (e2: PlaylistError) {
+                uaNow = UA_VLC
+                PlaylistDiag.log("ua", "app identifier failed too")
+                throw if (e2.message?.startsWith("Zugang abgelehnt") == true) e else e2
+            }
+            PlaylistDiag.log("ua", "app identifier accepted, kept for this playlist")
+            rememberNative(c, u)
+            return r
+        }
+    }
+
+    private fun downloadOnce(c: Context, u: String): Pair<File, Charset> {
         // Uploaded file (phone page or file picker): already on the device
         if (u.startsWith("file://")) {
             val f = File(java.net.URI(u))
@@ -660,8 +715,8 @@ object PlaylistStore {
         }
     }
 
-    /** API access for the episodes of a series that are only loaded when it is opened ([LazySeries]). */
-    internal fun xtreamApi(): XtreamApi = XtreamApi(client, UA)
+    /** API access for the provider at [base] with the identifier it accepts (#90, #84: also after a start from the cache). */
+    internal fun xtreamApi(c: Context, base: String): XtreamApi = XtreamApi(client, if (nativeFor(c, base)) UA_NATIVE else UA_VLC)
 
     /** Build the list via the provider's API (see [XtreamApi]) and store it like a finished download. */
     private fun downloadApi(c: Context, u: String, acct: XtreamLogic.Acct): Pair<File, Charset> {
@@ -873,6 +928,7 @@ object PlaylistStore {
      * If the user requests the language selection meanwhile, it asks again and parses again.
      */
     private suspend fun build(c: Context, url: String, src: File, gz: Boolean, cs: Charset, ask: Boolean, teeTo: File?, forceAsk: Boolean = false): Built {
+        trimCtx = c.applicationContext
         var force = forceAsk
         while (true) {
             try {
@@ -972,10 +1028,22 @@ object PlaylistStore {
         if (i !in lists.indices) return
         if (loadLock.isLocked) return   // a load is already running: do not interfere
         activate(c, i)
+        // #77: mark as loading before the old list is cleared, so the screen shows the loading skeleton and never
+        // "No channels yet" in between (load() resets the flag in its finally block)
+        loading = true
         primaryItems = emptyList(); primaryUrl = null
         merged = MultiLogic.Merged(emptyList(), emptySet(), emptyMap()); sourceNames = emptyList()
         setItems(emptyList())
         load(c, lists[i].url, false)
+    }
+
+    /**
+     * [switchTo] started from a header or list button (#77): runs in the app scope, because clearing the old list
+     * removes the screen that holds the button, and a coroutine tied to it would be cancelled half way.
+     */
+    fun switchDetached(c: Context, i: Int) {
+        val app = c.applicationContext
+        appScope.launch { switchTo(app, i) }
     }
 
     /** Show a playlist additionally (or no longer). Call [applyMulti] afterwards. */

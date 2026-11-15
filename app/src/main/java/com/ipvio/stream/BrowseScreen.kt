@@ -41,7 +41,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-data class BrowseReq(val title: String, val items: List<Item>, val sort: Int = 0)
+/**
+ * [pool] and [catName] are set when the view was opened from a category (#27): the Genre pill then shows that category
+ * as its first entry, and picking a genre switches to that genre across [pool] instead of filtering inside the category.
+ */
+data class BrowseReq(val title: String, val items: List<Item>, val sort: Int = 0, val pool: List<Item>? = null, val catName: String? = null)
 
 class BrowseState(req0: BrowseReq) {
     /** Titles of the view; grows when a Stalker category is loaded further on opening ([StalkerMore]). */
@@ -192,7 +196,7 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
 
     // Filter choices and result list are computed in the background ("All movies" can have 60,000 titles)
     val facets by produceState(state.lastFacets?.takeIf { it.first == ver }?.second, req, ver) {
-        value = withContext(Dispatchers.Default) { facetsOf(req.items) }.also { state.lastFacets = ver to it }
+        value = withContext(Dispatchers.Default) { facetsOf(req.pool ?: req.items) }.also { state.lastFacets = ver to it }
     }
     val genres = facets?.genres.orEmpty()
     val countries = facets?.countries.orEmpty()
@@ -204,7 +208,7 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
     val langOptions = remember(req) { BrowseLangPrefs.available(req.items) }
     val key = BrowseKey(state.sort, state.minRi, state.year, state.genre, state.country, ver, state.source, state.lang)
     val listOrNull by produceState(state.lastList?.takeIf { state.lastKey == key }, req, key) {
-        value = withContext(Dispatchers.Default) { filterAndSort(req.items, key) }.also { state.lastKey = key; state.lastList = it }
+        value = withContext(Dispatchers.Default) { filterAndSort(if (key.genre != null && req.pool != null) req.pool else req.items, key) }.also { state.lastKey = key; state.lastList = it }
     }
     val list = listOrNull.orEmpty()
     val ready = listOrNull != null
@@ -246,7 +250,7 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
     ) {
         Column(Modifier.fillMaxSize().sidebarPad().padding(horizontal = 32.dp, vertical = DS.PageY)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(req.title, color = Color.White, fontSize = spx(34), fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                Text(if (req.pool != null) state.genre ?: req.title else req.title, color = Color.White, fontSize = spx(34), fontWeight = FontWeight.ExtraBold, maxLines = 1)
                 Text(if (ready) (if (list.size == 1) "1 Titel" else "${list.size} Titel") else "Lade …", color = Muted, fontSize = 16.sp)
                 // New info from the genre detection: re-sort only on request so nothing shifts under the cursor
                 if (newer && ready) SmallPill("Neue Infos · aktualisieren") {
@@ -279,8 +283,10 @@ var restoreIdx by remember { mutableIntStateOf(state.focused) }
                         DropdownPill("Jahr", state.year, yearOptions, yearOptions.indexOf(state.year).coerceAtLeast(0), active = state.year != "Alle", icon = FIcon.Year) { state.year = yearOptions[it] }
                     }
                     if (genres.isNotEmpty()) item {
-                        val go = listOf("Alle") + genres
-                        DropdownPill("Genre", state.genre ?: "Alle", go, go.indexOf(state.genre).coerceAtLeast(0), active = state.genre != null, icon = FIcon.Genre) {
+                        // Opened from a category (#27): its name is the first entry, a genre replaces it instead of combining
+                        val first = if (req.pool != null) req.catName ?: "Alle" else "Alle"
+                        val go = listOf(first) + genres.filter { it != first }
+                        DropdownPill("Genre", state.genre ?: first, go, go.indexOf(state.genre).coerceAtLeast(0), active = state.genre != null, icon = FIcon.Genre) {
                             state.genre = if (it == 0) null else go[it]
                         }
                     }

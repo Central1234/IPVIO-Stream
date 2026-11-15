@@ -153,6 +153,20 @@ class XtreamApi(private val client: OkHttpClient, private val ua: String) {
     }
 
     private fun epList(jr: JsonReader, season: Int?, sink: (Map<String, String>, Int?) -> Unit) {
+        // Some providers send a season as an object keyed by episode number ({"1": {...}, "2": {...}}) instead of a list (#84)
+        if (jr.peek() == JsonToken.BEGIN_OBJECT) {
+            jr.beginObject()
+            while (jr.hasNext()) {
+                jr.nextName()
+                when (jr.peek()) {
+                    JsonToken.BEGIN_OBJECT -> sink(flat(jr), season)
+                    JsonToken.BEGIN_ARRAY -> epList(jr, season, sink)
+                    else -> jr.skipValue()
+                }
+            }
+            jr.endObject()
+            return
+        }
         if (jr.peek() != JsonToken.BEGIN_ARRAY) { jr.skipValue(); return }
         jr.beginArray()
         while (jr.hasNext()) {

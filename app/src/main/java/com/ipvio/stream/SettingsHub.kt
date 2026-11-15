@@ -1350,6 +1350,12 @@ private fun PlaylistPage(ctx: Context, onAdd: () -> Unit, reload: () -> Unit) {
         ConfirmPill("Playlist komplett neu laden") { scope.launch { PlaylistStore.reloadFromScratch(ctx) } }
         Hint("Discards everything stored for the active playlist and downloads it again from the provider. Helps when categories or channels are missing. Name, backup servers and language selection are kept.")
     }
+    // #69: hosts the user allowed to use without encryption (certificate did not match the address)
+    if (TlsFallback.allowedHosts().isNotEmpty()) {
+        ConfirmPill("Erlaubte unverschlüsselte Server vergessen") { TlsPrompt.forgetAll(ctx) }
+        Text(TlsFallback.allowedHosts().joinToString(", "), color = Muted, fontSize = 15.sp, raw = true)
+        Hint("Diese Server passen nicht zu ihrem Zertifikat und dürfen ohne Verschlüsselung verbunden werden. Nach dem Vergessen wird wieder gefragt.")
+    }
     LanguageFilterSection(ctx)
     SectionTitle("Automatisch aktualisieren")
     val modes = listOf("Bei jedem Start", "Alle paar Stunden", "Täglich", "Wöchentlich", "Nur von Hand")

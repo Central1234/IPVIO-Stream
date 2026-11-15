@@ -336,7 +336,7 @@ fun LiveTab(liveAll: List<Item>, groupsAll: Map<String, List<Item>>, favsAll: Li
                                     if (si >= 0) { if (multiView) LiveSource.k = si }
                                     else {
                                         LiveSource.k = -1
-                                        plScope.launch { PlaylistStore.switchTo(ctx, pi) }
+                                        PlaylistStore.switchDetached(ctx, pi)
                                     }
                                 }
                                 // The chosen category may not exist in the other playlist: then "All channels"

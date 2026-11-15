@@ -120,8 +120,8 @@ class TapAwareDataSource(private val normal: DataSource) : DataSource {
             return d.open(dataSpec)
         } catch (e: IOException) {
             val low = if (TlsFallback.isHostMismatch(e)) TlsFallback.downgradeUrl(url) else null
-            if (low == null) throw e
-            dataSpec.uri.host?.let { TlsFallback.markBroken(it) }
+            val host = dataSpec.uri.host
+            if (low == null || host == null || !TlsFallback.mayDowngrade(host)) throw e
             Diag.report("Zertifikat passt nicht zur Adresse – Wiedergabe ohne Verschlüsselung")
             runCatching { d.close() }
             return d.open(dataSpec.withUri(Uri.parse(low)))

@@ -329,7 +329,6 @@ private fun ClockPill() {
 @Composable
 private fun AreaPlaylistPill(tab: Int) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val pls = PlaylistStore.lists.toList()
     val multiView = PlaylistStore.sourceNames.size > 1
     val k = if (multiView) AreaSource.get(tab) else -1
@@ -345,7 +344,7 @@ private fun AreaPlaylistPill(tab: Int) {
             val pi = pick - off
             val si = PlaylistStore.shownIndex(pi)
             if (si >= 0) { if (multiView) AreaSource.set(tab, si) }
-            else { AreaSource.set(tab, -1); scope.launch { PlaylistStore.switchTo(ctx, pi) } }
+            else { AreaSource.set(tab, -1); PlaylistStore.switchDetached(ctx, pi) }
         }
     }
 }
@@ -354,14 +353,13 @@ private fun AreaPlaylistPill(tab: Int) {
 @Composable
 private fun PlaylistSwitchButton() {
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var open by remember { mutableStateOf(false) }
     val pls = PlaylistStore.lists.toList()
     Box {
         TextHeaderButton("Playlist", onClick = { open = true })
         if (open) OptionPopup(pls.map { it.name }, PlaylistStore.active, { open = false }) { i ->
             open = false
-            if (i != PlaylistStore.active) scope.launch { PlaylistStore.switchTo(ctx, i) }
+            if (i != PlaylistStore.active) PlaylistStore.switchDetached(ctx, i)
         }
     }
 }

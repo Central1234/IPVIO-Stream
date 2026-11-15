@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
         Config.init(this)
         Config.initSubs(this)
         LiveSettings.init(this)
+        TlsPrompt.init(this)
         Recorder.attach(this)
         MobilePrefs.apply(this)
         // Fresh start (not just a rotated/recreated screen): "Resume last watched at start" may apply again.
@@ -451,7 +452,11 @@ private fun AppContent() {
             ) }
             c != null -> Box(Modifier.fillMaxSize().screenEnter()) { CategoriesScreen(
                 c, tab,
-                onPick = { name, list, sort -> browse = BrowseState(BrowseReq(name, list, sort)) },
+                onPick = { name, list, sort ->
+                    // #27: the whole area as pool, so the Genre pill can switch to another genre instead of filtering inside this one
+                    val pool = if (isTopEntry(name)) null else c.provider.values.flatten().ifEmpty { c.ipvio.values.flatten().distinctBy { it.id } }.ifEmpty { null }
+                    browse = BrowseState(BrowseReq(name, list, sort, pool = pool, catName = name))
+                },
                 onOpen = open,
                 onBack = { cats = null },
                 onGoTab = { if (it != MenuLogic.EPG) cats = null; goTab(it) }
@@ -499,6 +504,8 @@ private fun AppContent() {
             ) }
         }
         if (RemoteUi.show) RemoteOverlay(Modifier.align(Alignment.Center))
+        // #69: ask before a provider is used without encryption
+        TlsPromptHost()
         // W-004: not over the player or the add screen, and not at the same time as the update dialog
         if (p == null && !adding && (AppUpdate.available == null || AppUpdate.promptDismissed)) WhatsNewHost()
         // Live preview of the View settings: bar at the bottom, the real app stays visible

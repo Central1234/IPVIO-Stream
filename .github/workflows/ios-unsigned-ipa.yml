@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +21,11 @@ jobs:
       - name: Select newest Xcode
         run: |
           ls -d /Applications/Xcode*.app
-          X=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)
+          # Prefer a released Xcode 27.1+, then a 27.1 beta, then the newest release
+          ALL=$(ls -d /Applications/Xcode_*.app | sort -V)
+          X=$(echo "$ALL" | grep -v -i beta | grep -E 'Xcode_27\.[1-9]' | tail -1)
+          [ -z "$X" ] && X=$(echo "$ALL" | grep -E 'Xcode_27\.[1-9]' | tail -1)
+          [ -z "$X" ] && X=$(echo "$ALL" | grep -v -i beta | tail -1)
           echo "Using $X"
           sudo xcode-select -s "$X"
           xcodebuild -version

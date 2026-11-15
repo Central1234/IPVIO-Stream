@@ -6,6 +6,18 @@ A native SwiftUI app for iPhone and iPad that plays the same sources as the Andr
 - **M3U link**
 - **Emby / Jellyfin server** (movies, series with episodes, Live TV)
 
+**iPhone Duo:** layouts follow size classes. On the outer display (compact width) it looks like any iPhone app; on
+the unfolded inner display (regular width) Live TV gets a category column next to the channels, Movies/Series get a
+category column, a featured banner and larger posters, detail pages go side by side, the tab bar can become a sidebar,
+and the player shows the channel list beside the picture. Built with the Xcode 27 runner image (iOS 27.x SDK), so the
+app uses the full inner display. The fold-specific APIs Apple showed (hinge, reserved regions) are not used yet:
+their signatures were not published when this was written.
+
+**Player:** IPVIO's own controls instead of the system player: tap to show/hide, double tap left/right for 10 s,
+pinch for fill/fit, a large timeline with drag to seek, audio and subtitle track selection, speed (0.5–2×), picture
+format (fit, fill, stretch — useful on the Duo's 1.42 display where 16:9 is letterboxed), AirPlay, Picture in Picture,
+lock-screen controls, "Up next" countdown into the next episode, and channel up/down plus a channel list for live TV.
+
 Features: Live TV with categories, favourites and channel up/down in the player; Movies and Series with categories,
 posters, "Continue watching" and resume positions; series seasons/episodes (loaded on demand for Xtream and Emby)
 with "Next episode"; search across everything; several playlists; passwords in the Keychain; AirPlay and Picture in
@@ -17,7 +29,7 @@ phone-to-TV transfer, translations (the iOS UI is English only).
 
 ## Build
 
-Requirements: a Mac with Xcode 15 or newer, iOS 16+ device or simulator.
+Requirements: a Mac with Xcode 15 or newer, iOS 18+ device or simulator.
 
 ```bash
 brew install xcodegen
@@ -57,5 +69,5 @@ IPVIOStream/
 IPVIOStreamTests/
 ```
 
-Status: written without access to a Mac, so it has **not been compiled or run yet**. Expect a few compiler fixes on
-the first build.
+Status: compiles on GitHub Actions (`.github/workflows/ios-unsigned-ipa.yml`, Xcode 27 image, unsigned IPA as artifact).
+Not yet run on a device by the author.

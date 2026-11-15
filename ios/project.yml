@@ -1,0 +1,51 @@
+# XcodeGen spec for the IPVIO Stream iOS starter app.
+# Generate the Xcode project on a Mac:  brew install xcodegen && cd ios && xcodegen
+name: IPVIOStream
+options:
+  bundleIdPrefix: com.ipvio
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""   # set your Apple team ID here or in Xcode > Signing & Capabilities
+targets:
+  IPVIOStream:
+    type: application
+    platform: iOS
+    sources:
+      - path: IPVIOStream
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ipvio.stream.ios
+        TARGETED_DEVICE_FAMILY: "1,2"   # iPhone and iPad
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: IPVIO Stream
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "IPVIO Stream connects to media servers (Emby, Jellyfin, IPTV boxes) on your local network."
+    info:
+      path: IPVIOStream/Info.plist
+      properties:
+        # Many IPTV providers and home Emby servers only speak plain http
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        # Keep playing audio in the background and allow Picture in Picture
+        UIBackgroundModes: [audio]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+  IPVIOStreamTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: IPVIOStreamTests
+    dependencies:
+      - target: IPVIOStream
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES

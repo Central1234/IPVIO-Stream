@@ -1,6 +1,21 @@
 # Changelog
 
 ## Unreleased
+**Issue fixes (T-030)**
+- Xtream/M3U import: when the provider answers 403 to the VLC identifier, the app tries once with its own identifier (`IPVIOStream/<version>`) and keeps it for that provider when it works; credentials, addresses and TLS are unchanged (#90)
+- HTTPS no longer falls back to HTTP silently on a certificate/host mismatch: the app asks once per server ("Connect without encryption?"), remembers "yes" in `ipvio_tls_allow`, and the choice can be reset under Settings > Playlists (#69)
+- Switching the playlist from the Movies/Series/Live TV button no longer shows "No channels yet" in between; the switch runs in the app scope so leaving the screen does not cancel it (#77)
+- Movies/Series opened from a category: the Genre pill shows that category as its first entry, and picking a genre switches to that genre across the area instead of filtering inside the category (#27)
+- Series episodes: seasons sent as an object keyed by episode number are read; episode requests use the identifier the provider accepts, also after a start from the cache (#84)
+- "Content too large" while loading: image, guide and metadata caches are emptied before the parse is stopped for memory (#73, partial: needs a device log if it still happens)
+- Merged open PRs #40/#70 (fixes #10, #15, #18, #20, #22, #25 seek, #26, #28, #65, #67) and #71 (T-026)
+
+**Emby server source (T-030)**
+- New playlist type "Emby-Server" next to M3U, Xtream and Stalker: server address, user name, password. Movies, series (with episodes) and Live TV channels load into the existing screens. Movies and episodes play the original file (direct play), live channels as HLS from the server. Also works with Jellyfin (tries `/emby/…` first, then `/…`)
+
+**iOS starter app (T-030)**
+- New `ios/` folder: SwiftUI + AVPlayer app for iPhone/iPad with Xtream, M3U and Emby/Jellyfin sources, Live TV, Movies, Series, search, resume. Not compiled yet (no Mac available); see `ios/README.md`
+
 **Live TV**
 - Touch screens: tapping a category selects it and lists its channels; before, only the row highlight changed and the channels stayed on the old category (#67)
 - Right from a category always reaches the channels, also after scrolling a category's channels and switching to another category further down (the first channel row was not laid out yet, so the focus request went nowhere)

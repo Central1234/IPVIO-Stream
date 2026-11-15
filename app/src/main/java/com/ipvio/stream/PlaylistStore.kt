@@ -565,13 +565,13 @@ object PlaylistStore {
         return s
     }
 
+    /** Application context for [guard] to empty caches before a parse is stopped for memory (#73). */
+    @Volatile private var trimCtx: Context? = null
+
     /**
      * Guard for long reads (every 2,000 entries): abort by the user, and stop before memory runs out.
      * A controlled abort with a notice is better than a crash in the middle of parsing.
      */
-    /** Application context for [guard] to empty caches before a parse is stopped for memory (#73). */
-    @Volatile private var trimCtx: Context? = null
-
     private fun guard(askable: Boolean = true): () -> Unit {
         val j = job
         return {
@@ -614,10 +614,6 @@ object PlaylistStore {
 
     private fun charsetOf(name: String?): Charset = try { Charset.forName(name ?: "UTF-8") } catch (e: Exception) { Charsets.UTF_8 }
 
-    /**
-     * Downloads the list into a file – not into working memory. Returns the finished file and its charset.
-     * If a fully downloaded but unparsed file exists (crash/power loss while parsing), it is used.
-     */
     /** Hosts that accepted the app identifier after refusing VLC (#90); stored as a set, also used for series episodes. */
     private const val UA_HOSTS = "pl_ua_native_hosts"
     @Volatile private var nativeHosts: Set<String>? = null
@@ -662,6 +658,10 @@ object PlaylistStore {
         }
     }
 
+    /**
+     * Downloads the list into a file – not into working memory. Returns the finished file and its charset.
+     * If a fully downloaded but unparsed file exists (crash/power loss while parsing), it is used.
+     */
     private fun downloadOnce(c: Context, u: String): Pair<File, Charset> {
         // Uploaded file (phone page or file picker): already on the device
         if (u.startsWith("file://")) {
